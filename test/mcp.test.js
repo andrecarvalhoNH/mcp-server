@@ -23,6 +23,14 @@ const HEADERS = [
 // Extrai o texto JSON do content[0] de um retorno de handler.
 const parseHandler = ret => JSON.parse(ret.content[0].text);
 
+// Monta linhas-objeto a partir do CSV SEM aplicar o filtro ANO_MINIMO —
+// para testar os handlers de forma independente do ano configurado.
+function rowsDe(csvTexto) {
+  const regs = mcp.parsearCSV(csvTexto);
+  const h = regs[0];
+  return regs.slice(1).map(v => Object.fromEntries(h.map((k, i) => [k, v[i] ?? ""])));
+}
+
 // ── parsearCSV ──────────────────────────────────────────────────────────────
 
 describe("parsearCSV", () => {
@@ -88,20 +96,23 @@ describe("resolverIntervalo", () => {
 // ── montarLinhas + filtro ANO_MINIMO ────────────────────────────────────────────
 
 describe("montarLinhas (filtro ANO_MINIMO)", () => {
+  // Datas relativas ao ANO_MINIMO real (que pode vir do .env), para o teste
+  // não assumir um ano fixo.
+  const A = mcp.ANO_MINIMO;
   const texto = csv([
     HEADERS,
-    ["Antigo", "Redes/Wifi", "desc", "10/06/2023 10:00", "01/06/2023 09:00", "Não", "Não", "Matriz"],       // 2023 -> descarta
-    ["Virada", "ERP/Financeiro", "desc", "15/01/2025 14:00", "20/12/2024 08:00", "Não", "Não", "Matriz"],    // criado 2024, solucionado 2025 -> mantém
-    ["Atual", "Redes/Wifi", "linha1\r\nlinha2", "05/03/2025 09:00", "02/03/2025 08:00", "Não", "Não", "Filial"], // 2025 -> mantém
+    ["Antigo", "Redes/Wifi",  "desc",            `10/06/${A - 2} 10:00`, `01/06/${A - 2} 09:00`, "Não", "Não", "Matriz"], // antes de A -> descarta
+    ["Virada", "ERP/Financeiro", "desc",         `15/01/${A} 14:00`,     `20/12/${A - 1} 08:00`, "Não", "Não", "Matriz"], // criado A-1, solucionado A -> mantém
+    ["Atual",  "Redes/Wifi",  "linha1\r\nlinha2", `05/03/${A} 09:00`,     `02/03/${A} 08:00`,     "Não", "Não", "Filial"], // ano A -> mantém
   ]);
 
-  test(`mantém apenas ${mcp.ANO_MINIMO}+ (por criação OU solução)`, () => {
+  test(`mantém apenas ${A}+ (por criação OU solução)`, () => {
     const rows = mcp.montarLinhas(texto);
     const nomes = rows.map(r => r["NOME DO OPERADOR"]);
     assert.equal(rows.length, 2);
-    assert.ok(!nomes.includes("Antigo"), "2023 deve ser descartado");
-    assert.ok(nomes.includes("Virada"), "criado 2024/solucionado 2025 deve ficar");
-    assert.ok(nomes.includes("Atual"), "2025 deve ficar");
+    assert.ok(!nomes.includes("Antigo"), `ano ${A - 2} deve ser descartado`);
+    assert.ok(nomes.includes("Virada"), `criado ${A - 1}/solucionado ${A} deve ficar`);
+    assert.ok(nomes.includes("Atual"), `ano ${A} deve ficar`);
   });
 
   test("preserva campo multilinha ao montar as linhas", () => {
@@ -119,7 +130,7 @@ describe("montarLinhas (filtro ANO_MINIMO)", () => {
 
 describe("handlers", () => {
   // Ana, Bruno e Davi finalizados em 03/2025; Carlos conciliado (deve sair).
-  const rows = mcp.montarLinhas(csv([
+  const rows = rowsDe(csv([
     HEADERS,
     ["Ana",    "Redes/Wifi",      "d", "05/03/2025 10:00", "02/03/2025 09:00", "Não", "Não", "Matriz"],
     ["Bruno",  "Sistemas/ERP",    "d", "10/03/2025 14:00", "01/02/2025 08:00", "Não", "Sim", "Filial A"],
