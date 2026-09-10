@@ -2,8 +2,9 @@
   "name": "mcp-server",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "mcp.js",
   "scripts": {
+    "start": "node mcp.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

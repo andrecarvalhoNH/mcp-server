@@ -13,25 +13,43 @@ let cacheCSV = null;
 let cacheTime = 0;
 const CACHE_MS = 5 * 60 * 1000;
 
-// Divide uma linha CSV respeitando campos entre aspas duplas e ; interno
-function parseLinhaCSV(linha) {
-  const campos = [];
+/**
+ * Tokeniza o CSV inteiro em registros (arrays de campos), respeitando o
+ * separador ";", aspas duplas (com escape ""), e quebras de linha que ocorrem
+ * DENTRO de campos entre aspas. Processar o texto completo — em vez de dividir
+ * por linha antes de tratar as aspas — evita corromper registros cujos campos
+ * (ex.: descrição do chamado) contêm quebras de linha.
+ */
+function parsearCSV(texto) {
+  const registros = [];
+  let campos = [];
   let atual = "";
   let dentroAspas = false;
-  for (let i = 0; i < linha.length; i++) {
-    const c = linha[i];
+  const t = texto.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
     if (c === '"') {
-      if (dentroAspas && linha[i + 1] === '"') { atual += '"'; i++; }
+      if (dentroAspas && t[i + 1] === '"') { atual += '"'; i++; } // "" = aspas literal
       else dentroAspas = !dentroAspas;
     } else if (c === ";" && !dentroAspas) {
       campos.push(atual.trim());
+      atual = "";
+    } else if (c === "\n" && !dentroAspas) {
+      campos.push(atual.trim());
+      registros.push(campos);
+      campos = [];
       atual = "";
     } else {
       atual += c;
     }
   }
-  campos.push(atual.trim());
-  return campos;
+  // Fecha o último registro se o arquivo não terminar com quebra de linha
+  if (atual.length > 0 || campos.length > 0) {
+    campos.push(atual.trim());
+    registros.push(campos);
+  }
+  return registros;
 }
 
 async function buscarCSV() {
@@ -41,15 +59,16 @@ async function buscarCSV() {
   const resp = await axios.post(
     "https://apiintegracao.milvus.com.br/api/relatorio-personalizado/exportar",
     { nome: "Milvus", tipo: "csv" },
-    { headers: { "Content-Type": "application/json", "Authorization": TOKEN }, timeout: 30000 }
+    { headers: { "Content-Type": "application/json", "Authorization": TOKEN }, timeout: 30000, responseType: "text" }
   );
 
-  const linhas = resp.data.replace(/\r/g, "").trim().split("\n");
-  const headers = parseLinhaCSV(linhas[0]);
-  const rows = linhas.slice(1).map(linha => {
-    const vals = parseLinhaCSV(linha);
-    return Object.fromEntries(headers.map((h, i) => [h, vals[i] ?? ""]));
-  });
+  const registros = parsearCSV(String(resp.data).trim());
+  if (registros.length === 0) { cacheCSV = []; cacheTime = agora; return cacheCSV; }
+
+  const headers = registros[0];
+  const rows = registros.slice(1).map(vals =>
+    Object.fromEntries(headers.map((h, i) => [h, vals[i] ?? ""]))
+  );
 
   cacheCSV = rows;
   cacheTime = agora;
