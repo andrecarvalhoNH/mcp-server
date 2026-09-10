@@ -13,6 +13,10 @@ let cacheCSV = null;
 let cacheTime = 0;
 const CACHE_MS = 5 * 60 * 1000;
 
+// Só interessam tickets de ANO_MINIMO em diante — descarta a base histórica
+// logo no parse, para nenhuma tool processar dados anteriores. Configurável via .env.
+const ANO_MINIMO = Number(process.env.ANO_MINIMO) || 2025;
+
 /**
  * Tokeniza o CSV inteiro em registros (arrays de campos), respeitando o
  * separador ";", aspas duplas (com escape ""), e quebras de linha que ocorrem
@@ -70,9 +74,17 @@ async function buscarCSV() {
     Object.fromEntries(headers.map((h, i) => [h, vals[i] ?? ""]))
   );
 
-  cacheCSV = rows;
+  // Mantém apenas tickets criados OU solucionados em ANO_MINIMO ou depois.
+  // Usar as duas datas evita descartar ticket criado em 2024 e solucionado em 2025 (e vice-versa).
+  const rowsFiltradas = rows.filter(r => {
+    const dc = parseDateBR(r["DATA DE CRIAÇÃO DO TICKET"]);
+    const ds = parseDateBR(r["DATA DA SOLUÇÃO"]);
+    return (dc && dc.getFullYear() >= ANO_MINIMO) || (ds && ds.getFullYear() >= ANO_MINIMO);
+  });
+
+  cacheCSV = rowsFiltradas;
   cacheTime = agora;
-  return rows;
+  return rowsFiltradas;
 }
 
 // ── Datas e intervalos ────────────────────────────────────────────────────────
