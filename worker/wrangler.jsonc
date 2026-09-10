@@ -1,0 +1,14 @@
+{
+  // Config do Cloudflare Worker do MCP Nutrihouse.
+  // Deploy: cd worker && npm install && npx wrangler deploy
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nutrihouse-mcp",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "observability": { "enabled": true },
+  // Variável pública (não-secreta). Secrets (MILVUS_TOKEN, MCP_AUTH_TOKEN)
+  // são definidos com `wrangler secret put`, nunca aqui.
+  "vars": {
+    "ANO_MINIMO": "2025"
+  }
+}
