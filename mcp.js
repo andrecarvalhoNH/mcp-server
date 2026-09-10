@@ -56,6 +56,27 @@ function parsearCSV(texto) {
   return registros;
 }
 
+/**
+ * Converte o texto CSV em linhas-objeto e mantém apenas tickets criados OU
+ * solucionados em ANO_MINIMO ou depois. Função pura (sem I/O) — testável.
+ * Usar as duas datas evita descartar ticket criado em 2024 e solucionado em 2025 (e vice-versa).
+ */
+function montarLinhas(csvTexto) {
+  const registros = parsearCSV(String(csvTexto).trim());
+  if (registros.length === 0) return [];
+
+  const headers = registros[0];
+  const rows = registros.slice(1).map(vals =>
+    Object.fromEntries(headers.map((h, i) => [h, vals[i] ?? ""]))
+  );
+
+  return rows.filter(r => {
+    const dc = parseDateBR(r["DATA DE CRIAÇÃO DO TICKET"]);
+    const ds = parseDateBR(r["DATA DA SOLUÇÃO"]);
+    return (dc && dc.getFullYear() >= ANO_MINIMO) || (ds && ds.getFullYear() >= ANO_MINIMO);
+  });
+}
+
 async function buscarCSV() {
   const agora = Date.now();
   if (cacheCSV && (agora - cacheTime) < CACHE_MS) return cacheCSV;
@@ -66,25 +87,9 @@ async function buscarCSV() {
     { headers: { "Content-Type": "application/json", "Authorization": TOKEN }, timeout: 30000, responseType: "text" }
   );
 
-  const registros = parsearCSV(String(resp.data).trim());
-  if (registros.length === 0) { cacheCSV = []; cacheTime = agora; return cacheCSV; }
-
-  const headers = registros[0];
-  const rows = registros.slice(1).map(vals =>
-    Object.fromEntries(headers.map((h, i) => [h, vals[i] ?? ""]))
-  );
-
-  // Mantém apenas tickets criados OU solucionados em ANO_MINIMO ou depois.
-  // Usar as duas datas evita descartar ticket criado em 2024 e solucionado em 2025 (e vice-versa).
-  const rowsFiltradas = rows.filter(r => {
-    const dc = parseDateBR(r["DATA DE CRIAÇÃO DO TICKET"]);
-    const ds = parseDateBR(r["DATA DA SOLUÇÃO"]);
-    return (dc && dc.getFullYear() >= ANO_MINIMO) || (ds && ds.getFullYear() >= ANO_MINIMO);
-  });
-
-  cacheCSV = rowsFiltradas;
+  cacheCSV = montarLinhas(resp.data);
   cacheTime = agora;
-  return rowsFiltradas;
+  return cacheCSV;
 }
 
 // ── Datas e intervalos ────────────────────────────────────────────────────────
@@ -279,49 +284,69 @@ function createMCPServer() {
 
 // ── HTTPS Server ──────────────────────────────────────────────────────────────
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+function iniciarServidor() {
+  const app = express();
+  app.use(cors());
+  app.use(express.json());
 
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok" });
-});
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok" });
+  });
 
-// Nova instância de Server + Transport por requisição — evita "Already connected to a transport"
-app.all("/mcp", async (req, res) => {
-  try {
-    const server = createMCPServer();
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
-  } catch (err) {
-    console.error("Erro MCP:", err);
-    if (!res.headersSent) res.status(500).json({ error: err.message });
+  // Nova instância de Server + Transport por requisição — evita "Already connected to a transport"
+  app.all("/mcp", async (req, res) => {
+    try {
+      const server = createMCPServer();
+      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+    } catch (err) {
+      console.error("Erro MCP:", err);
+      if (!res.headersSent) res.status(500).json({ error: err.message });
+    }
+  });
+
+  const pfxPath = process.env.PFX_PATH || "./certs/mcp-server.pfx";
+  const pfxPassphrase = process.env.PFX_PASSPHRASE;
+
+  if (!pfxPassphrase) {
+    console.error("PFX_PASSPHRASE não configurado no .env");
+    process.exit(1);
   }
-});
 
-const pfxPath = process.env.PFX_PATH || "./certs/mcp-server.pfx";
-const pfxPassphrase = process.env.PFX_PASSPHRASE;
+  if (!fs.existsSync(pfxPath)) {
+    console.error("Certificado não encontrado em:", pfxPath);
+    process.exit(1);
+  }
 
-if (!pfxPassphrase) {
-  console.error("PFX_PASSPHRASE não configurado no .env");
-  process.exit(1);
-}
+  const httpsOptions = {
+    pfx: fs.readFileSync(pfxPath),
+    passphrase: pfxPassphrase,
+  };
 
-if (!fs.existsSync(pfxPath)) {
-  console.error("Certificado não encontrado em:", pfxPath);
-  process.exit(1);
-}
-
-const httpsOptions = {
-  pfx: fs.readFileSync(pfxPath),
-  passphrase: pfxPassphrase,
-};
-
-(async () => {
   https.createServer(httpsOptions, app).listen(3001, () => {
     console.log("Nutrihouse MCP Server v2.1 escutando em https://localhost:3001");
     console.log("  /mcp    — POST/GET");
     console.log("  /health — GET");
   });
-})();
+}
+
+// Só sobe o servidor quando executado direto (node mcp.js); ao ser importado
+// por um teste, apenas expõe as funções abaixo.
+if (require.main === module) {
+  iniciarServidor();
+}
+
+module.exports = {
+  ANO_MINIMO,
+  parsearCSV,
+  parseDateBR,
+  resolverIntervalo,
+  filtrarFinalizados,
+  montarLinhas,
+  handleResumoPeriodo,
+  handleTicketsPorOperador,
+  handleTicketsPorCategoria,
+  handleComparativoAnual,
+  TOOLS,
+};
