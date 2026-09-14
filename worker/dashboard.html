@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard TI — Nutrihouse</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: #ffffff;
+    color: #3a3a3a;
+    font-family: 'Segoe UI', Arial, sans-serif;
+  }
+
+  /* PALETA FOODS ACADEMY
+     Coral:   #e8554e
+     Amarelo: #E3A941
+     Teal:    #80B5B4
+     Bege:    #d5B897
+  */
+
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: 64px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 32px;
+    background: #ffffff;
+    border-bottom: 1px solid #f0f0f0;
+    z-index: 50;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: linear-gradient(135deg, #e8554e, #B95758);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 800; font-size: 1rem;
+    box-shadow: 0 6px 16px rgba(232,85,78,0.25);
+  }
+  .brand-text { display: flex; flex-direction: column; line-height: 1; }
+  .brand-text .top { font-size: 0.65rem; color: #80B5B4; letter-spacing: 2px; text-transform: uppercase; }
+  .brand-text .bot { font-size: 1rem; color: #B95758; font-weight: 700; margin-top: 3px; }
+  .topbar-right { display: flex; align-items: center; gap: 18px; font-size: 0.8rem; color: #888; }
+  .topbar-right b { color: #E3A941; font-weight: 700; }
+  .loading-pill {
+    font-size: 0.7rem; padding: 4px 10px; border-radius: 12px;
+    background: #fdf4e2; color: #E3A941; font-weight: 700;
+  }
+  .loading-pill.ok { background: #e8f6ee; color: #2ea64f; }
+  .loading-pill.err { background: #fde6e4; color: #c0392b; }
+
+  .period-picker {
+    display: flex; align-items: center; gap: 6px;
+    background: #fafafa; border: 1px solid #eee;
+    border-radius: 20px; padding: 4px 8px;
+  }
+  .period-picker select {
+    border: none; background: transparent;
+    font-family: inherit; font-size: 0.8rem; color: #B95758;
+    font-weight: 700; cursor: pointer; outline: none;
+    padding: 2px 4px;
+  }
+  .period-picker button {
+    background: transparent; border: none; color: #80B5B4;
+    font-size: 0.75rem; cursor: pointer; padding: 2px 6px;
+    text-transform: uppercase; letter-spacing: 1px; font-weight: 700;
+  }
+  .period-picker button:hover { color: #e8554e; }
+
+  .deck { position: relative; height: 100vh; }
+  .slide {
+    position: absolute;
+    top: 64px; left: 0; right: 0; bottom: 96px;
+    padding: 18px 40px 8px 40px;
+    opacity: 0; pointer-events: none;
+    transform: translateX(40px);
+    transition: opacity .45s ease, transform .45s ease;
+    display: flex; flex-direction: column;
+    min-height: 0;
+  }
+  .slide.active { opacity: 1; pointer-events: auto; transform: translateX(0); }
+
+  .slide-header {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #f3f3f3;
+    margin-bottom: 14px;
+    flex-shrink: 0;
+  }
+  .slide-title h2 { font-size: 1.3rem; color: #B95758; font-weight: 700; letter-spacing: 1px; }
+  .slide-title p { font-size: 0.75rem; color: #80B5B4; margin-top: 4px; text-transform: uppercase; letter-spacing: 2px; }
+  .slide-number { font-size: 0.75rem; color: #E3A941; font-weight: 700; background: #fdf4e2; padding: 5px 12px; border-radius: 20px; }
+
+  /* Slide capa */
+  .cover { align-items: center; justify-content: center; text-align: center; }
+  .cover .badge { color: #80B5B4; font-size: 0.8rem; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 14px; }
+  .cover h1 { font-size: 3.2rem; color: #B95758; font-weight: 800; line-height: 1.05; letter-spacing: -1px; }
+  .cover h1 span { color: #E3A941; }
+  .cover .subtitle { font-size: 1.15rem; color: #555; margin-top: 14px; }
+  .cover .kpi-bar { display: flex; gap: 22px; margin-top: 40px; justify-content: center; flex-wrap: wrap; }
+  .kpi {
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 20px 32px;
+    min-width: 180px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+    border-top: 4px solid #e8554e;
+    text-align: center;
+  }
+  .kpi:nth-child(2) { border-top-color: #E3A941; }
+  .kpi:nth-child(3) { border-top-color: #80B5B4; }
+  .kpi:nth-child(4) { border-top-color: #d5B897; }
+  .kpi .number { font-size: 2.4rem; font-weight: 800; color: #B95758; }
+  .kpi:nth-child(2) .number { color: #E3A941; }
+  .kpi:nth-child(3) .number { color: #80B5B4; }
+  .kpi:nth-child(4) .number { color: #B89070; }
+  .kpi .label { font-size: 0.7rem; color: #888; margin-top: 4px; text-transform: uppercase; letter-spacing: 1.5px; }
+
+  /* Chart stage */
+  .chart-stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #fafafa;
+    border-radius: 16px;
+    padding: 18px;
+    box-shadow: inset 0 0 0 1px #f0f0f0;
+    overflow: hidden;
+    position: relative;
+  }
+  .chart-stage canvas { max-width: 100%; max-height: 100%; }
+
+  /* Waves */
+  .waves { position: fixed; left: 0; right: 0; bottom: 0; height: 50px; pointer-events: none; z-index: 1; overflow: hidden; }
+  .waves svg { width: 100%; height: 100%; display: block; }
+
+  /* Nav */
+  .nav { position: fixed; bottom: 18px; left: 0; right: 0; display: flex; justify-content: center; align-items: center; gap: 16px; z-index: 60; }
+  .nav button {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: none; background: #ffffff; color: #B95758;
+    font-size: 1.1rem; font-weight: 700; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    transition: transform .15s ease, background .15s ease, color .15s ease;
+  }
+  .nav button:hover { background: #e8554e; color: #fff; transform: scale(1.06); }
+  .nav button:disabled { opacity: 0.35; cursor: not-allowed; }
+  .dots { display: flex; gap: 8px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #e0e0e0; cursor: pointer; transition: all .2s ease; }
+  .dot.active { background: #E3A941; width: 28px; border-radius: 6px; }
+
+  .hint { position: fixed; bottom: 22px; right: 26px; font-size: 0.7rem; color: #aaa; z-index: 60; }
+  .hint kbd { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; border: 1px solid #e0e0e0; font-family: inherit; }
+
+  .skeleton { color: #ccc; font-style: italic; }
+
+  .error-panel {
+    position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+    max-width: 720px; width: 90%;
+    background: #fff5f4; border: 1px solid #f5c2bf; color: #8a2018;
+    padding: 14px 18px; border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    font-size: 0.85rem; z-index: 100;
+    display: none;
+  }
+  .error-panel.show { display: block; }
+  .error-panel b { display: block; margin-bottom: 4px; color: #B95758; }
+  .error-panel pre {
+    margin-top: 8px; background: #fff; padding: 8px; border-radius: 6px;
+    font-size: 0.75rem; max-height: 200px; overflow: auto;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .error-panel button {
+    margin-top: 10px; background: #e8554e; color: #fff; border: none;
+    padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: 600;
+  }
+
+  /* Slide de Feitos */
+  .feitos-wrap {
+    flex: 1 1 auto; min-height: 0;
+    display: flex; flex-direction: column;
+    gap: 14px;
+  }
+  .feitos-input-bar {
+    display: flex; gap: 10px; align-items: center;
+    background: #fafafa; border-radius: 12px; padding: 12px 14px;
+    box-shadow: inset 0 0 0 1px #f0f0f0;
+    flex-shrink: 0;
+  }
+  .feitos-input-bar input {
+    flex: 1;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    color: #3a3a3a;
+    background: #fff;
+    outline: none;
+    transition: border-color .15s ease;
+  }
+  .feitos-input-bar input:focus { border-color: #e8554e; }
+  .feitos-input-bar button {
+    background: #e8554e; color: #fff; border: none;
+    padding: 10px 18px; border-radius: 8px; cursor: pointer;
+    font-weight: 700; font-size: 0.9rem;
+    transition: background .15s ease, transform .15s ease;
+  }
+  .feitos-input-bar button:hover { background: #B95758; transform: translateY(-1px); }
+  .feitos-input-bar button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .feitos-count {
+    font-size: 0.75rem; color: #888;
+    padding: 6px 10px; background: #fdf4e2; color: #E3A941;
+    border-radius: 12px; font-weight: 700;
+  }
+
+  .feitos-stage {
+    flex: 1 1 auto; min-height: 0;
+    overflow-y: auto;
+    padding: 4px;
+  }
+  .feitos {
+    list-style: none;
+    display: grid;
+    gap: 14px 22px;
+    /* Adaptativo: colunas se ajustam à largura */
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    width: 100%;
+  }
+  .feitos li {
+    display: flex; align-items: flex-start; gap: 12px;
+    background: #fafafa;
+    border-left: 4px solid #e8554e;
+    border-radius: 8px;
+    padding: 14px 16px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+    font-size: 0.95rem; color: #3a3a3a;
+    line-height: 1.4;
+    position: relative;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .feitos li:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .feitos li:nth-child(3n+2) { border-left-color: #E3A941; }
+  .feitos li:nth-child(3n+3) { border-left-color: #80B5B4; }
+  .feitos .bullet {
+    flex-shrink: 0;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #e8554e;
+    margin-top: 6px;
+  }
+  .feitos li:nth-child(3n+2) .bullet { background: #E3A941; }
+  .feitos li:nth-child(3n+3) .bullet { background: #80B5B4; }
+  .feitos .txt { flex: 1; }
+  .feitos .del-btn {
+    flex-shrink: 0;
+    background: transparent; border: none; cursor: pointer;
+    color: #ccc; font-size: 1.1rem; padding: 0 4px;
+    transition: color .15s ease;
+    line-height: 1;
+  }
+  .feitos .del-btn:hover { color: #e8554e; }
+  .feitos-empty {
+    grid-column: 1 / -1;
+    text-align: center; color: #999; font-style: italic;
+    padding: 40px 20px;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">TI</div>
+    <div class="brand-text">
+      <span class="top">Relatório Mensal</span>
+      <span class="bot">Dashboard de TI</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="period-picker" title="Selecione o mês de referência">
+      <select id="sel-mes"></select>
+      <select id="sel-ano"></select>
+      <button id="btn-atual" title="Voltar ao mês anterior ao atual">Atual</button>
+    </div>
+    <span id="status-pill" class="loading-pill">Carregando…</span>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- Slide 1: Capa -->
+  <section class="slide cover active">
+    <div class="badge">Relatório de Atendimento</div>
+    <h1 id="cover-title">— <br><span>—</span></h1>
+    <p class="subtitle">Visão geral dos tickets encerrados no mês</p>
+    <div class="kpi-bar">
+      <div class="kpi">
+        <div class="number" id="kpi-tickets">—</div>
+        <div class="label">Tickets encerrados</div>
+      </div>
+      <div class="kpi">
+        <div class="number" id="kpi-operadores">—</div>
+        <div class="label">Operadores ativos</div>
+      </div>
+      <div class="kpi">
+        <div class="number" id="kpi-categorias">—</div>
+        <div class="label">Categorias distintas</div>
+      </div>
+      <div class="kpi">
+        <div class="number" id="kpi-unidades">—</div>
+        <div class="label">Unidades atendidas</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Slide 2: Operadores -->
+  <section class="slide">
+    <div class="slide-header">
+      <div class="slide-title">
+        <h2>Tickets encerrados por operador</h2>
+        <p id="sub-operadores">—</p>
+      </div>
+      <div class="slide-number">02 / 05</div>
+    </div>
+    <div class="chart-stage"><canvas id="chart-operadores"></canvas></div>
+  </section>
+
+  <!-- Slide 3: Categorias -->
+  <section class="slide">
+    <div class="slide-header">
+      <div class="slide-title">
+        <h2>Ocorrências por categoria principal</h2>
+        <p>Distribuição dos chamados encerrados</p>
+      </div>
+      <div class="slide-number">03 / 05</div>
+    </div>
+    <div class="chart-stage"><canvas id="chart-categorias"></canvas></div>
+  </section>
+
+  <!-- Slide 4: Comparativo Anual -->
+  <section class="slide">
+    <div class="slide-header">
+      <div class="slide-title">
+        <h2>Comparativo anual</h2>
+        <p id="sub-comparativo">— vs —</p>
+      </div>
+      <div class="slide-number">04 / 05</div>
+    </div>
+    <div class="chart-stage"><canvas id="chart-comparativo"></canvas></div>
+  </section>
+
+  <!-- Slide 5: Destaques do mês (feitos) -->
+  <section class="slide">
+    <div class="slide-header">
+      <div class="slide-title">
+        <h2>Destaques do mês</h2>
+        <p id="sub-feitos">Principais entregas e conquistas</p>
+      </div>
+      <div class="slide-number">05 / 05</div>
+    </div>
+    <div class="feitos-wrap">
+      <div class="feitos-input-bar">
+        <input id="feito-input" type="text" placeholder="Descreva um feito e pressione Enter…" maxlength="240" />
+        <button id="feito-add">Adicionar</button>
+        <span class="feitos-count" id="feitos-count">0 feito(s)</span>
+      </div>
+      <div class="feitos-stage">
+        <ul class="feitos" id="feitos-list"></ul>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- Waves -->
+<div class="waves">
+  <svg viewBox="0 0 1440 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M0,60 C240,110 480,10 720,50 C960,90 1200,30 1440,70 L1440,120 L0,120 Z" fill="#E3A941" opacity="0.85"/>
+    <path d="M0,80 C240,40 480,100 720,70 C960,40 1200,90 1440,60 L1440,120 L0,120 Z" fill="#80B5B4" opacity="0.85"/>
+    <path d="M0,95 C240,70 480,115 720,90 C960,65 1200,110 1440,85 L1440,120 L0,120 Z" fill="#e8554e"/>
+  </svg>
+</div>
+
+<div class="nav">
+  <button id="prev" aria-label="Anterior">&#10094;</button>
+  <div class="dots" id="dots"></div>
+  <button id="next" aria-label="Próximo">&#10095;</button>
+</div>
+
+<div class="hint">Use <kbd>&larr;</kbd> <kbd>&rarr;</kbd> ou <kbd>Space</kbd></div>
+
+<div id="error-panel" class="error-panel">
+  <b>Erro ao carregar dados</b>
+  <span id="error-msg"></span>
+  <pre id="error-detail"></pre>
+  <button onclick="location.reload()">Tentar novamente</button>
+</div>
+
+<script>
+const MESES_FULL = ["", "Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+// Helpers MCP — parsing defensivo
+// Painel servido pelo próprio Worker: /mcp é mesma origem.
+const MCP_URL = '/mcp';
+
+// Injetado pelo Worker (rota GET /) a partir do secret MCP_AUTH_TOKEN.
+const MCP_AUTH_TOKEN = '__MCP_AUTH_TOKEN__';
+
+// Extrai o objeto JSON-RPC de uma resposta que pode vir como SSE
+// ("event: message\ndata: {...}") ou como JSON puro.
+function extrairPayloadMCP(texto) {
+  const t = (texto || '').trim();
+  if (!t) return null;
+  if (t[0] === '{') { try { return JSON.parse(t); } catch (_) {} }
+  let ultimo = null;
+  for (const linha of t.split(/\r?\n/)) {
+    const m = linha.match(/^data:\s*(.*)$/);
+    if (m && m[1].trim()) { try { ultimo = JSON.parse(m[1]); } catch (_) {} }
+  }
+  return ultimo;
+}
+
+async function mcp(name, args) {
+  let resp;
+  try {
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/event-stream',
+    };
+    if (MCP_AUTH_TOKEN) headers['Authorization'] = `Bearer ${MCP_AUTH_TOKEN}`;
+    resp = await fetch(MCP_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method: 'tools/call',
+        params: { name, arguments: args },
+      }),
+    });
+  } catch (e) {
+    throw new Error(`Falha de rede ao acessar o MCP em ${MCP_URL}. Verifique se o servidor está no ar e se o certificado HTTPS foi aceito no navegador. Detalhe: ${e.message}`);
+  }
+  if (!resp.ok) throw new Error(`${name}: HTTP ${resp.status} do MCP`);
+
+  const payload = extrairPayloadMCP(await resp.text());
+  console.log(`[MCP ${name}]`, payload);
+  if (!payload) throw new Error(`${name}: resposta vazia/ilegível do MCP`);
+  if (payload.error) throw new Error(`${name}: ${payload.error.message || JSON.stringify(payload.error)}`);
+
+  const r = (payload.result != null) ? payload.result : payload;
+
+  if (r && r.isError) {
+    const txt = (r.content && r.content[0] && r.content[0].text) || JSON.stringify(r);
+    throw new Error(`${name} retornou isError: ${txt}`);
+  }
+
+  // 1) structuredContent direto (objeto/array)
+  if (r && r.structuredContent !== undefined && r.structuredContent !== null) {
+    const sc = r.structuredContent;
+    if (typeof sc === 'object' && !Array.isArray(sc) && 'result' in sc && Object.keys(sc).length === 1) {
+      return sc.result;
+    }
+    return sc;
+  }
+
+  // 2) content[].text como JSON string
+  if (r && Array.isArray(r.content) && r.content.length > 0) {
+    const txt = r.content[0].text;
+    if (typeof txt === 'string') {
+      try { return JSON.parse(txt); } catch (_) { return txt; }
+    }
+  }
+
+  throw new Error(`Resposta inesperada de ${name}: ${JSON.stringify(payload).slice(0, 300)}`);
+}
+
+function showError(msg, detail) {
+  const panel = document.getElementById('error-panel');
+  document.getElementById('error-msg').textContent = msg;
+  document.getElementById('error-detail').textContent = detail || '';
+  panel.classList.add('show');
+}
+
+// Navegação slides
+const slides = document.querySelectorAll('.slide');
+const dotsEl = document.getElementById('dots');
+const prevBtn = document.getElementById('prev');
+const nextBtn = document.getElementById('next');
+let current = 0;
+slides.forEach((_, i) => {
+  const d = document.createElement('div');
+  d.className = 'dot' + (i === 0 ? ' active' : '');
+  d.addEventListener('click', () => go(i));
+  dotsEl.appendChild(d);
+});
+const dots = document.querySelectorAll('.dot');
+function go(idx) {
+  if (idx < 0 || idx >= slides.length) return;
+  slides[current].classList.remove('active');
+  dots[current].classList.remove('active');
+  current = idx;
+  slides[current].classList.add('active');
+  dots[current].classList.add('active');
+  prevBtn.disabled = current === 0;
+  nextBtn.disabled = current === slides.length - 1;
+}
+prevBtn.addEventListener('click', () => go(current - 1));
+nextBtn.addEventListener('click', () => go(current + 1));
+document.addEventListener('keydown', e => {
+  // Ignora atalhos quando o foco está em um input/textarea
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
+
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); go(current + 1); }
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); go(current - 1); }
+  if (e.key === 'Home') go(0);
+  if (e.key === 'End')  go(slides.length - 1);
+});
+prevBtn.disabled = true;
+
+// Cores Foods Academy
+const COR_CORAL = '#e8554e';
+const COR_AMARELO = '#E3A941';
+const COR_TEAL = '#80B5B4';
+const COR_BEGE = '#d5B897';
+const COR_VERDE = '#2eab2e';
+const COR_VERMELHO = '#ff5555';
+
+const PALETA = [COR_CORAL, COR_AMARELO, COR_TEAL, COR_BEGE, '#B95758', '#B89070', '#5a8a89'];
+
+Chart.defaults.color = '#3a3a3a';
+Chart.defaults.font.family = "'Segoe UI', Arial, sans-serif";
+
+// ── Feitos (persistência por mês em localStorage) ───────────────
+let FEITOS_KEY = null;      // definido no carregar()
+let FEITOS_MES_LABEL = '';  // "Maio 2026"
+
+function feitosLoad() {
+  if (!FEITOS_KEY) return [];
+  try {
+    const raw = localStorage.getItem(FEITOS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (_) { return []; }
+}
+function feitosSave(list) {
+  if (!FEITOS_KEY) return;
+  try { localStorage.setItem(FEITOS_KEY, JSON.stringify(list)); } catch (_) {}
+}
+function feitosRender() {
+  const list = feitosLoad();
+  const ul = document.getElementById('feitos-list');
+  const count = document.getElementById('feitos-count');
+  count.textContent = `${list.length} feito(s)`;
+  ul.innerHTML = '';
+  if (list.length === 0) {
+    ul.innerHTML = `<li class="feitos-empty">Nenhum feito registrado para ${FEITOS_MES_LABEL}. Adicione o primeiro acima.</li>`;
+    return;
+  }
+  list.forEach((f, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <span class="bullet"></span>
+      <span class="txt"></span>
+      <button class="del-btn" title="Remover" aria-label="Remover">&times;</button>
+    `;
+    li.querySelector('.txt').textContent = f;
+    li.querySelector('.del-btn').addEventListener('click', () => {
+      const cur = feitosLoad();
+      cur.splice(i, 1);
+      feitosSave(cur);
+      feitosRender();
+    });
+    ul.appendChild(li);
+  });
+}
+function feitosAdd() {
+  const input = document.getElementById('feito-input');
+  const val = input.value.trim();
+  if (!val) return;
+  const list = feitosLoad();
+  list.push(val);
+  feitosSave(list);
+  input.value = '';
+  feitosRender();
+}
+document.getElementById('feito-add').addEventListener('click', feitosAdd);
+document.getElementById('feito-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); feitosAdd(); }
+});
+
+// Mês/ano de referência padrão = mês anterior ao atual
+function refPadrao() {
+  const hoje = new Date();
+  const ref = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+  return { mes: ref.getMonth() + 1, ano: ref.getFullYear() };
+}
+
+// Instâncias de Chart.js — precisam ser destruídas ao trocar de período
+let CHART_INSTANCES = {};
+function destruirCharts() {
+  Object.values(CHART_INSTANCES).forEach(c => { try { c.destroy(); } catch(_){} });
+  CHART_INSTANCES = {};
+}
+
+// Popula selects de mês/ano
+function popularSelects(mesAtual, anoAtual) {
+  const selMes = document.getElementById('sel-mes');
+  const selAno = document.getElementById('sel-ano');
+  selMes.innerHTML = '';
+  for (let m = 1; m <= 12; m++) {
+    const opt = document.createElement('option');
+    opt.value = m; opt.textContent = MESES_FULL[m];
+    if (m === mesAtual) opt.selected = true;
+    selMes.appendChild(opt);
+  }
+  selAno.innerHTML = '';
+  const anoBase = new Date().getFullYear();
+  for (let a = anoBase - 3; a <= anoBase + 1; a++) {
+    const opt = document.createElement('option');
+    opt.value = a; opt.textContent = a;
+    if (a === anoAtual) opt.selected = true;
+    selAno.appendChild(opt);
+  }
+}
+
+document.getElementById('sel-mes').addEventListener('change', () => {
+  const mes = parseInt(document.getElementById('sel-mes').value, 10);
+  const ano = parseInt(document.getElementById('sel-ano').value, 10);
+  carregar(mes, ano);
+});
+document.getElementById('sel-ano').addEventListener('change', () => {
+  const mes = parseInt(document.getElementById('sel-mes').value, 10);
+  const ano = parseInt(document.getElementById('sel-ano').value, 10);
+  carregar(mes, ano);
+});
+document.getElementById('btn-atual').addEventListener('click', () => {
+  const p = refPadrao();
+  carregar(p.mes, p.ano);
+});
+
+// Carregar dados
+async function carregar(mesOverride, anoOverride) {
+  const status = document.getElementById('status-pill');
+  document.getElementById('error-panel').classList.remove('show');
+  status.textContent = 'Carregando…';
+  status.className = 'loading-pill';
+  destruirCharts();
+
+  try {
+    const p = refPadrao();
+    const mes = mesOverride ?? p.mes;
+    const ano = anoOverride ?? p.ano;
+    const nomeMes = MESES_FULL[mes];
+    popularSelects(mes, ano);
+
+    document.getElementById('cover-title').innerHTML = `${nomeMes}<br><span>${ano}</span>`;
+    document.getElementById('sub-operadores').textContent = `${nomeMes} ${ano}`;
+    document.getElementById('sub-comparativo').textContent = `${ano - 1} vs ${ano}`;
+
+    // Configura feitos do mês de referência
+    FEITOS_KEY = `feitos-${ano}-${String(mes).padStart(2,'0')}`;
+    FEITOS_MES_LABEL = `${nomeMes} ${ano}`;
+    document.getElementById('sub-feitos').textContent = `Principais entregas e conquistas — ${FEITOS_MES_LABEL}`;
+    feitosRender();
+
+    // allSettled: a falha de um tool não zera o dashboard inteiro
+    const nomes = ['resumo_periodo', 'tickets_por_operador', 'tickets_por_categoria', 'comparativo_anual'];
+    const settled = await Promise.allSettled([
+      mcp('mcp__nutrihouse-milvus__resumo_periodo', { mes, ano }),
+      mcp('mcp__nutrihouse-milvus__tickets_por_operador', { mes, ano }),
+      mcp('mcp__nutrihouse-milvus__tickets_por_categoria', { mes, ano }),
+      mcp('mcp__nutrihouse-milvus__comparativo_anual', { ano_atual: ano }),
+    ]);
+    const [resumo, opsRaw, catsRaw, comp] = settled.map(s => s.status === 'fulfilled' ? s.value : null);
+    const falhas = settled
+      .map((s, i) => s.status === 'rejected' ? `${nomes[i]}: ${s.reason?.message || s.reason}` : null)
+      .filter(Boolean);
+
+    // Normaliza shape — SEMPRE devolve array (aceita array direto, envelope
+    // {operadores:[]}/{categorias:[]}, ou qualquer outro shape -> []). Evita "ops is not iterable".
+    const asArray = v => Array.isArray(v) ? v : [];
+    const pick = (v, key) => Array.isArray(v) ? v : asArray(v?.[key]);
+    const ops  = pick(opsRaw, 'operadores');
+    const cats = pick(catsRaw, 'categorias');
+    const totalOpsPeriodo = (typeof opsRaw?.total === 'number') ? opsRaw.total : null;
+
+    // KPIs
+    document.getElementById('kpi-tickets').textContent = resumo?.total_finalizados ?? '—';
+    document.getElementById('kpi-operadores').textContent = ops.length;
+    document.getElementById('kpi-categorias').textContent = cats.length;
+    document.getElementById('kpi-unidades').textContent = resumo?.unidades_atendidas ?? '—';
+
+    // Chart 1 — operadores (barh)
+    const opsOrdenado = [...ops].sort((a, b) => a.qtd - b.qtd);
+    const totalOps = totalOpsPeriodo ?? opsOrdenado.reduce((s, x) => s + x.qtd, 0);
+    CHART_INSTANCES.operadores = new Chart(document.getElementById('chart-operadores'), {
+      type: 'bar',
+      data: {
+        labels: opsOrdenado.map(o => o.nome),
+        datasets: [{
+          label: 'Tickets',
+          data: opsOrdenado.map(o => o.qtd),
+          backgroundColor: COR_CORAL,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          title: { display: true, text: `Tickets encerrados por operador — ${mes}/${ano} (${totalOps} no total)`, color: '#3a3a3a', font: { size: 14, weight: 'bold' } },
+          tooltip: { backgroundColor: '#2E2A2A' }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(0,0,0,0.05)' }, title: { display: true, text: 'Tickets' } },
+          y: { grid: { display: false } }
+        }
+      }
+    });
+
+    // Chart 2 — categorias (bar vertical, com labels acima)
+    const catsOrdenado = [...cats].sort((a, b) => b.qtd - a.qtd);
+    CHART_INSTANCES.categorias = new Chart(document.getElementById('chart-categorias'), {
+      type: 'bar',
+      data: {
+        labels: catsOrdenado.map(c => c.cat),
+        datasets: [{
+          label: 'Tickets',
+          data: catsOrdenado.map(c => c.qtd),
+          backgroundColor: catsOrdenado.map((_, i) => PALETA[i % PALETA.length]),
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          title: { display: true, text: 'Ocorrências por Categoria Principal — Tickets Encerrados', color: '#3a3a3a', font: { size: 14, weight: 'bold' } },
+          tooltip: {
+            backgroundColor: '#2E2A2A',
+            callbacks: {
+              label: (ctx) => {
+                const item = catsOrdenado[ctx.dataIndex];
+                return `${item.qtd} tickets (${item.pct}%)`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 30 } },
+          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, title: { display: true, text: 'Quantidade de Tickets' } }
+        }
+      }
+    });
+
+    // Chart 3 — Comparativo anual (protegido contra comp ausente)
+    const compDados = Array.isArray(comp?.dados) ? comp.dados : [];
+    const anoPassado = comp?.ano_passado ?? (ano - 1);
+    const anoAtual   = comp?.ano_atual   ?? ano;
+    const labels = compDados.map(d => d.mes);
+    CHART_INSTANCES.comparativo = new Chart(document.getElementById('chart-comparativo'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: `Abertos ${anoPassado}`,  data: compDados.map(d => d.abertos_passado),  backgroundColor: 'rgba(46,171,46,0.35)' },
+          { label: `Fechados ${anoPassado}`, data: compDados.map(d => d.fechados_passado), backgroundColor: 'rgba(255,85,85,0.35)' },
+          { label: `Abertos ${anoAtual}`,    data: compDados.map(d => d.abertos_atual),    backgroundColor: COR_VERDE },
+          { label: `Fechados ${anoAtual}`,   data: compDados.map(d => d.fechados_atual),   backgroundColor: COR_VERMELHO },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 14 } },
+          title: { display: true, text: `Comparativo de Tickets Abertos x Fechados — ${anoPassado} x ${anoAtual}`, color: '#3a3a3a', font: { size: 14, weight: 'bold' } },
+          tooltip: { backgroundColor: '#2E2A2A' }
+        },
+        scales: {
+          x: { grid: { display: false }, title: { display: true, text: 'Mês' } },
+          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.08)', borderDash: [4, 4] }, title: { display: true, text: 'Quantidade de Tickets' } }
+        }
+      }
+    });
+
+    if (falhas.length) {
+      showError('Algumas consultas falharam — exibindo dados parciais', falhas.join(' | '));
+      status.textContent = 'Parcial';
+      status.className = 'loading-pill err';
+    } else {
+      status.textContent = 'Atualizado';
+      status.className = 'loading-pill ok';
+    }
+  } catch (err) {
+    console.error('[dashboard]', err);
+    status.textContent = 'Erro ao carregar';
+    status.className = 'loading-pill err';
+    showError(err.message || String(err), err.stack || '');
+  }
+}
+
+carregar();
+</script>
+</body>
+</html>

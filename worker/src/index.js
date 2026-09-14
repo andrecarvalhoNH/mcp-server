@@ -10,6 +10,8 @@
 // A lógica das tools espelha mcp.js (mantenha os dois em sincronia).
 // ─────────────────────────────────────────────────────────────────────────────
 
+import PANEL_HTML from "../dashboard.html";
+
 const MILVUS_URL = "https://apiintegracao.milvus.com.br/api/relatorio-personalizado/exportar";
 const CACHE_TTL = 300; // segundos
 
@@ -254,6 +256,13 @@ export default {
 
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     if (url.pathname === "/health") return json({ status: "ok" });
+
+    // Painel HTML servido na raiz — token injetado a partir do secret (uso interno).
+    if (url.pathname === "/" || url.pathname === "/index.html") {
+      const html = PANEL_HTML.replaceAll("__MCP_AUTH_TOKEN__", env.MCP_AUTH_TOKEN || "");
+      return new Response(html, { headers: { ...CORS, "Content-Type": "text/html; charset=utf-8" } });
+    }
+
     if (url.pathname !== "/mcp") return json({ error: "Not found" }, 404);
 
     // Autenticação por token no header
