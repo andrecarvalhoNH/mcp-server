@@ -13,7 +13,15 @@
 import PANEL_HTML from "../dashboard.html";
 
 const MILVUS_URL = "https://apiintegracao.milvus.com.br/api/relatorio-personalizado/exportar";
-const CACHE_TTL = 300; // segundos
+const CACHE_TTL = 300;        // segundos (Cache API)
+const MEM_TTL = 300 * 1000;   // ms (cache em memória do isolate)
+
+// Estado por isolate: cache das linhas já parseadas + promise em andamento.
+// O "inflight" evita que as 4 chamadas concorrentes do painel disparem 4 fetches
+// e 4 parses da base inteira ao mesmo tempo (o que estourava recurso → HTTP 503).
+let memRows = null;
+let memTime = 0;
+let inflight = null;
 
 function anoMinimo(env) {
   return Number(env.ANO_MINIMO) || 2025;
@@ -71,26 +79,41 @@ function montarLinhas(csvTexto, ANO_MINIMO) {
 }
 
 async function buscarCSV(env, ctx) {
-  const cache = caches.default;
-  const cacheKey = new Request("https://mcp-cache.local/milvus-csv");
-  const hit = await cache.match(cacheKey);
-  let texto;
-  if (hit) {
-    texto = await hit.text();
-  } else {
-    const resp = await fetch(MILVUS_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": env.MILVUS_TOKEN },
-      body: JSON.stringify({ nome: "Milvus", tipo: "csv" }),
-    });
-    if (!resp.ok) throw new Error(`Milvus respondeu HTTP ${resp.status}`);
-    texto = await resp.text();
-    const paraCache = new Response(texto, {
-      headers: { "Cache-Control": `max-age=${CACHE_TTL}`, "Content-Type": "text/csv" },
-    });
-    ctx.waitUntil(cache.put(cacheKey, paraCache));
-  }
-  return montarLinhas(texto, anoMinimo(env));
+  const agora = Date.now();
+  if (memRows && (agora - memTime) < MEM_TTL) return memRows;   // cache quente em memória
+  if (inflight) return inflight;                                // reusa fetch/parse já em andamento
+
+  inflight = (async () => {
+    try {
+      const cache = caches.default;
+      const cacheKey = new Request("https://mcp-cache.local/milvus-csv");
+      let texto;
+      const hit = await cache.match(cacheKey);
+      if (hit) {
+        texto = await hit.text();
+      } else {
+        const resp = await fetch(MILVUS_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": env.MILVUS_TOKEN },
+          body: JSON.stringify({ nome: "Milvus", tipo: "csv" }),
+        });
+        if (!resp.ok) throw new Error(`Milvus respondeu HTTP ${resp.status}`);
+        texto = await resp.text();
+        const paraCache = new Response(texto, {
+          headers: { "Cache-Control": `max-age=${CACHE_TTL}`, "Content-Type": "text/csv" },
+        });
+        ctx.waitUntil(cache.put(cacheKey, paraCache));
+      }
+      const rows = montarLinhas(texto, anoMinimo(env));
+      memRows = rows;
+      memTime = Date.now();
+      return rows;
+    } finally {
+      inflight = null;
+    }
+  })();
+
+  return inflight;
 }
 
 // ── Intervalos ───────────────────────────────────────────────────────────────
