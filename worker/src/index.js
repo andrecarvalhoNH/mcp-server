@@ -86,19 +86,28 @@ async function buscarCSV(env, ctx) {
   inflight = (async () => {
     try {
       const cache = caches.default;
-      const cacheKey = new Request("https://mcp-cache.local/milvus-csv");
+      const cacheKey = new Request("https://mcp-cache.local/milvus-csv-v2");
       let texto;
       const hit = await cache.match(cacheKey);
       if (hit) {
         texto = await hit.text();
       } else {
-        const resp = await fetch(MILVUS_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": env.MILVUS_TOKEN },
-          body: JSON.stringify({ nome: "Milvus", tipo: "csv" }),
-        });
+        const t0 = Date.now();
+        let resp;
+        try {
+          resp = await fetch(MILVUS_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": env.MILVUS_TOKEN },
+            body: JSON.stringify({ nome: "Milvus", tipo: "csv" }),
+            signal: AbortSignal.timeout(45000),
+          });
+        } catch (e) {
+          console.log(`[milvus] falhou apos ${Date.now() - t0}ms: ${e.name} ${e.message}`);
+          throw new Error(`Milvus não respondeu a tempo (${Math.round((Date.now() - t0) / 1000)}s): ${e.name}`);
+        }
         if (!resp.ok) throw new Error(`Milvus respondeu HTTP ${resp.status}`);
         texto = await resp.text();
+        console.log(`[milvus] OK ${Date.now() - t0}ms, ${texto.length} chars`);
         const paraCache = new Response(texto, {
           headers: { "Cache-Control": `max-age=${CACHE_TTL}`, "Content-Type": "text/csv" },
         });

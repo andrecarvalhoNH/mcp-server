@@ -9,6 +9,6 @@
   // Variável pública (não-secreta). Secrets (MILVUS_TOKEN, MCP_AUTH_TOKEN)
   // são definidos com `wrangler secret put`, nunca aqui.
   "vars": {
-    "ANO_MINIMO": "2023"
+    "ANO_MINIMO": "2025"
   }
 }
