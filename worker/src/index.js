@@ -192,12 +192,14 @@ const TOOLS = [
 
 async function callTool(name, args, env, ctx) {
   if (!env.MILVUS_TOKEN) return { content: [{ type: "text", text: "MILVUS_TOKEN não configurado" }], isError: true };
+  // Aceita nome puro (resumo_periodo) ou com prefixo do cliente (mcp__servidor__resumo_periodo).
+  const bare = String(name || "").startsWith("mcp__") ? name.split("__").slice(2).join("__") : name;
   try {
     const rows = await buscarCSV(env, ctx);
-    if (name === "resumo_periodo")        return handleResumoPeriodo(args, rows);
-    if (name === "tickets_por_operador")  return handleTicketsPorOperador(args, rows);
-    if (name === "tickets_por_categoria") return handleTicketsPorCategoria(args, rows);
-    if (name === "comparativo_anual")     return handleComparativoAnual(args, rows);
+    if (bare === "resumo_periodo")        return handleResumoPeriodo(args, rows);
+    if (bare === "tickets_por_operador")  return handleTicketsPorOperador(args, rows);
+    if (bare === "tickets_por_categoria") return handleTicketsPorCategoria(args, rows);
+    if (bare === "comparativo_anual")     return handleComparativoAnual(args, rows);
     return { content: [{ type: "text", text: `Tool desconhecida: ${name}` }], isError: true };
   } catch (err) {
     return { content: [{ type: "text", text: `Erro: ${err.message}` }], isError: true };
